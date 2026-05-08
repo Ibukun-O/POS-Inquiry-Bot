@@ -1,10 +1,10 @@
 # POS Inquiry Bot
 
-A headless Python service that scans your Gmail inbox for unread **"POS Inquiry"** emails,
-uses the **Claude AI** (Anthropic) to analyse sentiment and draft a professional reply,
+A Python service that scans your Gmail inbox for unread "POS Inquiry" emails,
+analyzes sentiment and drafts a professional reply,
 saves the draft back to Gmail, then marks the original as read.
 
-A **FastAPI** backend wraps the scanner so you can trigger scans via HTTP or run
+A FastAPI backend wraps the scanner so you can trigger scans via HTTP or run
 automatic polling on a configurable interval.
 
 ---
