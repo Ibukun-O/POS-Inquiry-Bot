@@ -1,8 +1,10 @@
 # POS Inquiry Bot
 
-A Python service that scans your Gmail inbox for unread "POS Inquiry" emails, analyzes sentiment and draft a professional reply, saves the draft back to Gmail and then marks the original as read.
+A headless Python service that scans your Gmail inbox for unread **"POS Inquiry"** emails,
+uses the **Claude AI** (Anthropic) to analyse sentiment and draft a professional reply,
+saves the draft back to Gmail, then marks the original as read.
 
-A FastAPI backend wraps the scanner so you can trigger scans via HTTP or run
+A **FastAPI** backend wraps the scanner so you can trigger scans via HTTP or run
 automatic polling on a configurable interval.
 
 ---
@@ -156,4 +158,3 @@ FAQs, pricing tiers, or tone guidelines.
 - Never commit your `.env` file – it is in `.gitignore`.
 - The refresh token grants long-lived Gmail access; treat it like a password.
 - Rotate your Anthropic API key regularly from [console.anthropic.com](https://console.anthropic.com).
-
