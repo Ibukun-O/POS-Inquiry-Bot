@@ -1,6 +1,6 @@
 # 📬 Gmail POS Inquiry Bot
 
-> A headless Python service that monitors your Gmail inbox for unread **POS Inquiry** emails, analyses customer sentiment with **OpenAI GPT-4o**, drafts a professional reply, saves it to Gmail Drafts, and marks the original as read — all automatically.
+> A Python service that monitors your Gmail inbox for unread **POS Inquiry** emails, analyses customer sentiment with **OpenAI GPT-4o**, drafts a professional reply, saves it to Gmail Drafts, and marks the original as read — all automatically.
 
 ---
 
