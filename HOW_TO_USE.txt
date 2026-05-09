@@ -1,0 +1,420 @@
+╔══════════════════════════════════════════════════════════════╗
+║          Gmail POS Inquiry Bot  —  Setup & Usage Guide       ║
+║                  Powered by OpenAI GPT-4o                    ║
+╚══════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WHAT THE BOT DOES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Every time the bot runs, it:
+
+  1. Connects to your Gmail inbox using the Gmail API.
+  2. Finds every unread email with "POS Inquiry" in the subject.
+  3. Sends each email body to OpenAI for sentiment analysis
+       → returns: positive | neutral | negative  (+score  +summary)
+  4. Asks OpenAI to write a professional, empathetic reply
+       tailored to the detected sentiment.
+  5. Saves the reply as a Gmail Draft inside the same thread.
+  6. Marks the original email as read (so it won't be processed again).
+
+It ships as two runnables:
+
+  main.py   One-shot CLI scan  (run directly or schedule via cron)
+  api.py    FastAPI HTTP service  (trigger scans & inspect results)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FILE STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  auth.py           Google OAuth2 helper (token caching & refresh)
+  scanner.py        Gmail scanner + OpenAI sentiment & reply logic
+  main.py           CLI entry point
+  api.py            FastAPI web service
+  requirements.txt  Python package dependencies
+  .env.example      Environment variable template
+  .gitignore        Excludes secrets and build artefacts
+  HOW_TO_USE.txt    This file
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRE-REQUISITES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  • Python 3.11 or higher
+  • A Gmail account
+  • An OpenAI API key  →  https://platform.openai.com/api-keys
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — GOOGLE CLOUD SETUP  (one-time)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You need an OAuth 2.0 client so the bot can read and write your Gmail.
+
+  1.  Open https://console.cloud.google.com
+      Create a new project (or select an existing one).
+
+  2.  Enable the Gmail API:
+        APIs & Services  →  Library
+        Search "Gmail API"  →  Enable
+
+  3.  Configure the OAuth consent screen:
+        APIs & Services  →  OAuth consent screen
+        - User Type: External
+        - Fill in App name, support email, developer email.
+        - Click "Save and Continue" through all steps.
+        - Under "Test users", add your own Gmail address.
+
+  4.  Create credentials:
+        APIs & Services  →  Credentials
+        →  Create Credentials  →  OAuth client ID
+        - Application type: Desktop app
+        - Name: POS Inquiry Bot
+        - Click Create  →  Download JSON
+
+  5.  Rename the downloaded file to  credentials.json  and place it
+      in the project root (same directory as main.py).
+
+  ⚠️  IMPORTANT: Add credentials.json and token.json to .gitignore.
+      Never commit them to version control.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — PYTHON ENVIRONMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  # Create and activate a virtual environment
+  python3 -m venv .venv
+  source .venv/bin/activate          # Windows: .venv\Scripts\activate
+
+  # Install all dependencies
+  pip install -r requirements.txt
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 3 — ENVIRONMENT VARIABLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  cp .env.example .env
+
+  Open .env in any editor and set at minimum:
+
+    OPENAI_API_KEY=sk-...          ← your OpenAI secret key
+    OPENAI_MODEL=gpt-4o            ← or gpt-4o-mini for lower cost
+
+  All other variables have sensible defaults.
+
+  The bot uses python-dotenv to load .env automatically.
+  Alternatively, export variables in your shell before running.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 4 — FIRST RUN  (browser OAuth flow)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  python main.py
+
+  On the very first run a browser window opens asking you to grant
+  the bot access to your Gmail.  Sign in with your Google account
+  and click "Allow".
+
+  If you see "Google hasn't verified this app":
+    click  Advanced  →  Go to <App Name> (unsafe)
+  This is normal for development apps on external consent screens.
+
+  A  token.json  file is saved automatically.  All subsequent runs
+  skip the browser step entirely and refresh the token silently.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RUNNING THE CLI SCANNER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  python main.py
+
+  Example output:
+
+  ══════════════════════════════════════════════════════════════
+    Gmail POS Inquiry Bot — one-shot scan (OpenAI)
+  ══════════════════════════════════════════════════════════════
+    Model : gpt-4o
+
+  Processed 2 email(s):
+
+    [1] From      : angry.merchant@example.com
+         Subject   : POS Inquiry — Terminal keeps freezing
+         Received  : 2025-05-08 14:22 UTC
+         Sentiment : NEGATIVE  (-0.78)  ▓▓▓▓
+         Summary   : Customer is frustrated with repeated terminal crashes.
+         Draft ID  : r1234567890
+
+    [2] From      : happy.shop@example.com
+         Subject   : POS Inquiry about bulk pricing
+         Received  : 2025-05-08 16:05 UTC
+         Sentiment : POSITIVE  (+0.65)  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓
+         Summary   : Enthusiastic inquiry about volume discounts.
+         Draft ID  : r9876543210
+
+  All drafts saved to Gmail → Drafts. Review before sending.
+
+  After running, open Gmail → Drafts to review and send the replies.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCHEDULING AUTOMATIC SCANS  (optional)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Linux / macOS — cron:
+    crontab -e
+    # Run every 30 minutes:
+    */30 * * * * cd /path/to/project && .venv/bin/python main.py \
+                 >> /var/log/pos_bot.log 2>&1
+
+  Windows — Task Scheduler:
+    New Basic Task  →  Trigger: Daily / Repeat every 30 minutes
+    Action: Start a program
+      Program : C:\path\.venv\Scripts\python.exe
+      Arguments: C:\path\to\project\main.py
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RUNNING THE FASTAPI SERVICE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  python api.py
+
+  Server starts on  http://0.0.0.0:8000
+  Interactive Swagger docs:  http://localhost:8000/docs
+  ReDoc:                     http://localhost:8000/redoc
+
+  Custom port:
+    PORT=9000 python api.py
+
+  Development mode (auto-reload on file changes):
+    DEV=1 python api.py
+
+
+HTTP ENDPOINTS
+──────────────
+
+  GET  /
+    Health check and application info.
+    Returns: name, version, description, start time, uptime.
+
+    curl http://localhost:8000/
+
+  ─────────────────────────────────────────────────────────
+  GET  /status
+    Live runtime statistics.
+    Returns: uptime, total scans run, total emails processed,
+             timestamp of last scan, whether a scan is running,
+             last error message (if any).
+
+    curl http://localhost:8000/status
+
+  ─────────────────────────────────────────────────────────
+  GET  /config
+    Shows active configuration.  API keys are NEVER exposed —
+    only a boolean indicating whether they are set.
+
+    curl http://localhost:8000/config
+
+  ─────────────────────────────────────────────────────────
+  POST /scan
+    Triggers a Gmail scan in the background.
+    Returns immediately with a scan_id.
+    Returns 409 Conflict if a scan is already running.
+
+    curl -X POST http://localhost:8000/scan
+
+    Response:
+    {
+      "message": "Scan started in the background. Check GET /results shortly.",
+      "scan_id": "scan-20250508T142200Z"
+    }
+
+  ─────────────────────────────────────────────────────────
+  GET  /results
+    All results from the most recent scan (empty list until
+    the first scan completes).
+
+    curl http://localhost:8000/results
+
+    Each item includes:
+      result_id       — 0-based index
+      email           — msg_id, sender, subject, received_at, body_preview
+      sentiment       — label, score (−1…+1), summary
+      draft_id        — Gmail draft ID
+      draft_preview   — first 300 chars of the generated reply
+      processed_at    — ISO timestamp
+
+  ─────────────────────────────────────────────────────────
+  GET  /results/{id}
+    Full detail for a single result by 0-based index.
+
+    curl http://localhost:8000/results/0
+
+
+EXAMPLE SESSION
+───────────────
+
+  # 1. Start the API in one terminal
+  python api.py
+
+  # 2. In another terminal, check health
+  curl http://localhost:8000/ | python -m json.tool
+
+  # 3. Check runtime config
+  curl http://localhost:8000/config | python -m json.tool
+
+  # 4. Trigger a scan
+  curl -X POST http://localhost:8000/scan | python -m json.tool
+
+  # 5. Wait ~5 seconds, then get results
+  curl http://localhost:8000/results | python -m json.tool
+
+  # 6. Get detail for result #0
+  curl http://localhost:8000/results/0 | python -m json.tool
+
+  # 7. Check updated stats
+  curl http://localhost:8000/status | python -m json.tool
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOW IT WORKS INTERNALLY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  auth.py
+    Manages the Google OAuth2 lifecycle: loads token.json if
+    present, refreshes automatically when expired, opens the
+    browser for first-time authorisation.
+
+  scanner.py — fetch_unread_pos_emails()
+    Queries Gmail:  is:unread subject:"POS Inquiry"
+    Fetches full message objects and decodes MIME bodies
+    (handles plain text, multipart/mixed, multipart/alternative).
+
+  scanner.py — analyse_sentiment()
+    Sends the email body to:
+      POST https://api.openai.com/v1/chat/completions
+    System prompt enforces JSON-only output:
+      { "sentiment": "…", "score": …, "summary": "…" }
+
+  scanner.py — generate_reply()
+    Second OpenAI call with a support-agent system prompt.
+    The detected sentiment is injected so GPT tailors tone:
+      negative  →  empathetic + solution-focused
+      positive  →  enthusiastic + confirmatory
+      neutral   →  professional + informative
+
+  scanner.py — create_draft()
+    Encodes the reply as a MIME message (base64url) and calls
+    Gmail Drafts API, threading it to the original message.
+
+  scanner.py — mark_as_read()
+    Calls Gmail modify API to remove the UNREAD label.
+
+  api.py
+    Thin FastAPI wrapper.  Scans run as BackgroundTasks so HTTP
+    responses are instant.  State is kept in module-level variables
+    (swap for SQLite/PostgreSQL for production persistence).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CHOOSING AN OPENAI MODEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Set OPENAI_MODEL in .env to any of:
+
+  gpt-4o          Best quality; default.  Recommended for production.
+  gpt-4o-mini     Faster and cheaper.  Good for high-volume inboxes.
+
+  Both models are called twice per email (sentiment + reply).
+  Estimated cost per email:  ~$0.001–0.004 depending on body length.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECURITY NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  • credentials.json and token.json grant access to your Gmail.
+    They are excluded from git via .gitignore.  Keep them safe.
+
+  • OAuth scopes are limited to the minimum required:
+      gmail.readonly   read messages
+      gmail.compose    create drafts
+      gmail.modify     change labels (mark read)
+
+  • OPENAI_API_KEY is stored only in .env (never hard-coded).
+
+  • The FastAPI service has no authentication by default.
+    For production, add an API key header or place it behind a
+    reverse proxy (nginx, Caddy) with authentication.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  "credentials.json not found"
+    → Complete Step 1 above and place the file in the project root.
+
+  "Google hasn't verified this app" / "Access blocked"
+    → Add your Gmail address as a Test User in the OAuth consent
+      screen at https://console.cloud.google.com.
+
+  "Token has been expired or revoked"
+    → Delete token.json and re-run main.py to re-authenticate.
+
+  No emails found when you expect some
+    → The Gmail query used is:  is:unread subject:"POS Inquiry"
+      Check that the subject line contains exactly that phrase.
+      Also confirm the emails are still marked as unread.
+
+  OpenAI AuthenticationError
+    → Verify OPENAI_API_KEY is correct and has available credits
+      at https://platform.openai.com/usage.
+
+  409 Conflict from POST /scan
+    → A scan is already running.  Wait a few seconds and retry.
+
+  Sentiment JSON parse error in logs
+    → Rare model hallucination.  The bot falls back to "neutral".
+      Switch to gpt-4o if using gpt-4o-mini and seeing this often.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXTENDING THE BOT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Change the subject filter:
+    Edit the `query` string in scanner.fetch_unread_pos_emails().
+
+  Customise the reply persona:
+    Edit _REPLY_SYSTEM in scanner.py — change the company name,
+    agent name, tone, or response length.
+
+  Send replies automatically instead of saving drafts:
+    In scanner.py, replace  create_draft()  with a call to
+    service.users().messages().send().
+    ⚠️  Review draft quality first before enabling auto-send.
+
+  Persist results across restarts:
+    Replace the in-memory lists in api.py with SQLite via SQLModel
+    or PostgreSQL via asyncpg.
+
+  Add authentication to the API:
+    Use FastAPI's HTTPBearer dependency with a secret token stored
+    in your .env file.
+
+  Add scheduled scanning inside the API:
+    pip install apscheduler
+    Then add an APScheduler job in api.py's lifespan function
+    to call _do_scan() every N minutes automatically.
+
+
+╔══════════════════════════════════════════════════════════════╗
+║  Happy scanning!  Review your drafts before hitting Send.   ║
+╚══════════════════════════════════════════════════════════════╝

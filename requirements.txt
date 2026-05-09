@@ -1,0 +1,19 @@
+# Gmail POS Inquiry Bot — Python dependencies
+# Install with:  pip install -r requirements.txt
+
+# ── OpenAI ───────────────────────────────────────
+openai>=1.30.0
+
+# ── Google / Gmail API ───────────────────────────
+google-api-python-client>=2.120.0
+google-auth>=2.29.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
+
+# ── FastAPI stack ────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.7.0
+
+# ── Utilities ────────────────────────────────────
+python-dotenv>=1.0.0
